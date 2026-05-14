@@ -64,6 +64,6 @@ src/
 The legacy `~/dev/spending/pipeline/fetch.py` is **superseded** by direct browser calls. Keep around for reference until tabs are ported; delete after.
 
 ## Platform Docs & Publishing
-- **Full AI guide:** https://raw.githubusercontent.com/freeappstore-online/ops/main/SKILLS.md
+- **Full AI guide:** https://raw.githubusercontent.com/freeappstore-online/freeappstore/main/SKILLS.md
 - **Store registry:** ~/dev/stores/fas/freeappstore/registry.json
 - **Deploy:** Push to main auto-deploys via GitHub Actions / CF Pages
