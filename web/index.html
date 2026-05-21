@@ -11,6 +11,9 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <title>spending — FreeAppStore</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- Platform analytics loader. CF Web Analytics is auto-provisioned at publish;
+         GA4 / Plausible / custom <head> are opt-in via PUT /v1/apps/spending/analytics. -->
+    <script src="https://api.freeappstore.online/v1/analytics.js?app=spending" defer></script>
   </head>
   <body>
     <div id="root"></div>
