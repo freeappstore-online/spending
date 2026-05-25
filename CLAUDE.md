@@ -5,7 +5,7 @@ GCP spending & visibility dashboard. Sign in with Google → see your projects, 
 - Subdomain: `spending.freeappstore.online`
 - Dev: `pnpm install && pnpm dev`
 - Build: `pnpm build`
-- Deploy: `git push origin main` (auto-deploys via Cloudflare Pages)
+- Deploy: `git push origin main` (auto-deploys to R2 via GitHub Actions)
 
 Free, MIT-licensed, no tracking. For platform conventions, read
 https://raw.githubusercontent.com/freeappstore-online/freeappstore/main/SKILLS.md
@@ -16,7 +16,7 @@ before writing or changing anything.
 ## Setup (one-time, admin)
 1. GCP Console → Credentials → create **OAuth 2.0 Client ID (Web application)**.
 2. Authorized JS origins: **`https://spending.freeappstore.online`** only. No localhost.
-3. Set `VITE_GOOGLE_CLIENT_ID` as an environment variable in Cloudflare Pages project settings (production). OAuth client IDs are public identifiers, not secrets — but per platform convention, config goes in CF Pages env vars, not committed `.env.production` files.
+3. Set `VITE_GOOGLE_CLIENT_ID` as a GitHub repo Variable. The deploy workflow passes it to the build step. OAuth client IDs are public identifiers, not secrets.
 
 ## Architecture
 ```
