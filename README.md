@@ -2,7 +2,7 @@
 
 GCP spending & visibility dashboard. Sign in with Google → see live projects, billing, budgets, APIs, Firestore, BigQuery costs, and Cloud Monitoring activity. No backend, no stored credentials.
 
-Live at https://spending.freeappstore.online.
+Live at https://gcp-spending.freeappstore.online.
 
 ## How it works
 
@@ -12,7 +12,7 @@ No backend. No stored credentials. No nightly pipeline. Everything is live.
 
 ## Deploy
 
-Production-only. `git push origin main` → Cloudflare Pages auto-build → live in ~60s. No staging, no dev environment, no manual deploy.
+Production-only. `git push origin main` → GitHub Actions → R2 deploy → live in ~60s.
 
 ## License
 

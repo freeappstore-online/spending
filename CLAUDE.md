@@ -2,7 +2,7 @@
 
 GCP spending & visibility dashboard. Sign in with Google → see your projects, billing, budgets, APIs, Firestore databases, BigQuery cost breakdown, and Cloud Monitoring activity, **live**. No backend, no stored credentials, no nightly pipeline.
 
-- Subdomain: `spending.freeappstore.online`
+- Subdomain: `gcp-spending.freeappstore.online`
 - Dev: `pnpm install && pnpm dev`
 - Build: `pnpm build`
 - Deploy: `git push origin main` (auto-deploys to R2 via GitHub Actions)
@@ -15,7 +15,7 @@ before writing or changing anything.
 
 ## Setup (one-time, admin)
 1. GCP Console → Credentials → create **OAuth 2.0 Client ID (Web application)**.
-2. Authorized JS origins: **`https://spending.freeappstore.online`** only. No localhost.
+2. Authorized JS origins: **`https://gcp-spending.freeappstore.online`** only. No localhost.
 3. Set `VITE_GOOGLE_CLIENT_ID` as a GitHub repo Variable. The deploy workflow passes it to the build step. OAuth client IDs are public identifiers, not secrets.
 
 ## Architecture

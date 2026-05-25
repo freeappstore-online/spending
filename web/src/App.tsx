@@ -7,9 +7,9 @@ import { Overview } from "./pages/Overview";
 // auth/kv/rooms here (Google OAuth covers identity, no per-user server state
 // yet), but importing + instantiating it proves the package resolves and
 // loads in the bundle.
-const fas = new FreeAppStore({ appId: "spending" });
+const fas = new FreeAppStore({ appId: "gcp-spending" });
 // eslint-disable-next-line no-console
-console.log("[fas] sdk loaded", { appId: "spending", instance: fas });
+console.log("[fas] sdk loaded", { appId: "gcp-spending", instance: fas });
 
 export default function App() {
   const auth = useGoogleAuth();
