@@ -16,7 +16,7 @@ before writing or changing anything.
 ## Setup (one-time, admin)
 1. GCP Console → Credentials → create **OAuth 2.0 Client ID (Web application)**.
 2. Authorized JS origins: **`https://spending.freeappstore.online`** only. No localhost.
-3. `web/.env.production` holds `VITE_GOOGLE_CLIENT_ID=…apps.googleusercontent.com` (committed; OAuth client IDs are public identifiers, not secrets).
+3. Set `VITE_GOOGLE_CLIENT_ID` as an environment variable in Cloudflare Pages project settings (production). OAuth client IDs are public identifiers, not secrets — but per platform convention, config goes in CF Pages env vars, not committed `.env.production` files.
 
 ## Architecture
 ```

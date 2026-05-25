@@ -30,7 +30,7 @@ function SetupNeeded() {
         Setup needed
       </h1>
       <p style={{ color: "var(--muted)", marginBottom: "1rem" }}>
-        <code>VITE_GOOGLE_CLIENT_ID</code> is missing from this build. Commit it to <code>web/.env.production</code> and push.
+        <code>VITE_GOOGLE_CLIENT_ID</code> is missing from this build. Set it as an environment variable in Cloudflare Pages project settings and redeploy.
       </p>
     </div>
   );
