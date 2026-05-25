@@ -34,9 +34,9 @@ export default defineConfig({
         ],
       },
       manifest: {
-        name: "spending",
-        short_name: "spending",
-        description: "spending \u2014 free forever",
+        name: "GCP Spending",
+        short_name: "GCP Spending",
+        description: "GCP spending & visibility dashboard \u2014 free forever",
         start_url: '/',
         display: 'standalone',
         background_color: "#ffffff",

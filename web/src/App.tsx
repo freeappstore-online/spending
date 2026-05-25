@@ -1,8 +1,11 @@
+import { FreeAppStore } from "@freeappstore/sdk";
 import { Shell } from "./components/Shell";
 import { useGoogleAuth } from "./hooks/useGoogleAuth";
 import { useHash } from "./hooks/useHash";
 import { useGcpData } from "./hooks/useGcpData";
 import { Overview } from "./pages/Overview";
+
+void new FreeAppStore({ appId: "gcp-spending" });
 import { Projects } from "./pages/Projects";
 import { Billing } from "./pages/Billing";
 import { Budgets } from "./pages/Budgets";

@@ -1,6 +1,6 @@
-# spending
+# gcp-spending
 
-GCP spending & visibility dashboard. Sign in with Google → see your projects, billing, budgets, APIs, Firestore databases, BigQuery cost breakdown, and Cloud Monitoring activity, **live**. No backend, no stored credentials, no nightly pipeline.
+GCP spending & visibility dashboard. Sign in with Google, see your projects, billing, budgets, APIs, resources, Firestore databases, and auto-detected cost issues — live. No backend, no stored credentials.
 
 - Subdomain: `gcp-spending.freeappstore.online`
 - Dev: `pnpm install && pnpm dev`
@@ -14,24 +14,38 @@ before writing or changing anything.
 ---
 
 ## Setup (one-time, admin)
-1. GCP Console → Credentials → create **OAuth 2.0 Client ID (Web application)**.
-2. Authorized JS origins: **`https://gcp-spending.freeappstore.online`** only. No localhost.
-3. Set `VITE_GOOGLE_CLIENT_ID` as a GitHub repo Variable. The deploy workflow passes it to the build step. OAuth client IDs are public identifiers, not secrets.
+1. GCP Console -> Credentials -> create **OAuth 2.0 Client ID (Web application)**.
+2. Authorized JS origins: **`https://gcp-spending.freeappstore.online`** only.
+3. Set `VITE_GOOGLE_CLIENT_ID` as a GitHub repo Variable. The deploy workflow passes it to the build step.
 
 ## Architecture
 ```
 src/
-├── main.tsx           — React entry
-├── App.tsx            — top-level routing between SetupNeeded / SignIn / Overview
+├── main.tsx              — React entry
+├── App.tsx               — auth gating + tab routing
 ├── components/
-│   └── Shell.tsx      — FAS sidebar + mobile dock layout
+│   ├── Shell.tsx         — sidebar (desktop) + tab dock (mobile)
+│   ├── Card.tsx          — stat cards + card grid
+│   └── Table.tsx         — table, pill, external link primitives
 ├── hooks/
-│   └── useGoogleAuth.ts — GIS Token Client wrapper
+│   ├── useGoogleAuth.ts  — GIS Token Client wrapper
+│   ├── useGcpData.ts     — fetches all GCP data, returns DashboardData
+│   └── useHash.ts        — hash-based tab routing
 ├── lib/
-│   └── gcp.ts         — GCP REST helpers (currently: listProjects)
+│   ├── gcp.ts            — GCP REST API wrappers (projects, billing, budgets, services, resources, Firestore)
+│   └── fmt.ts            — money/number formatting, project labels
 ├── pages/
-│   └── Overview.tsx   — proof-of-concept tab (project count)
-└── types.ts           — GIS type declarations
+│   ├── Overview.tsx      — inventory cards, top APIs, resource breakdown
+│   ├── Projects.tsx      — filterable project table with status
+│   ├── Billing.tsx       — billing account cards with linked projects + budgets
+│   ├── Budgets.tsx       — budget table with thresholds
+│   ├── Resources.tsx     — type-filtered resource table
+│   ├── Idle.tsx          — idle project detection
+│   ├── Apis.tsx          — enabled API usage table
+│   ├── Firestore.tsx     — Firestore database listing
+│   ├── Issues.tsx        — auto-detected cost optimization issues
+│   └── Errors.tsx        — API fetch error log
+└── types.ts              — GIS types + all data model interfaces
 ```
 
-The legacy `~/dev/spending/pipeline/fetch.py` is **superseded** by direct browser calls. Keep around for reference until tabs are ported; delete after.
+Data flows: Google OAuth -> GCP REST APIs (browser-direct) -> useGcpData hook -> tab components.
