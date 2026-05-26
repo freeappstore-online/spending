@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SignedInUser, TokenClient, TokenResponse } from "../types";
 
-// Scopes the dashboard needs:
-//  - cloud-platform.read-only : projects.list, billingAccounts, services, firestore, monitoring
-//  - bigquery.readonly        : query billing-export tables
-//  - userinfo.email           : show signed-in email in the sidebar
 const SCOPES = [
   "https://www.googleapis.com/auth/cloud-platform.read-only",
   "https://www.googleapis.com/auth/bigquery.readonly",
@@ -12,10 +8,11 @@ const SCOPES = [
 ].join(" ");
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+const SESSION_KEY = "gcp-spending-session";
 
 export interface GoogleAuthState {
-  ready: boolean;          // GIS script loaded
-  configured: boolean;     // VITE_GOOGLE_CLIENT_ID is set
+  ready: boolean;
+  configured: boolean;
   user: SignedInUser | null;
   signingIn: boolean;
   error: string | null;
@@ -23,8 +20,33 @@ export interface GoogleAuthState {
   signOut: () => void;
 }
 
-// Poll for window.google.accounts to appear — the GIS script is async-loaded
-// from index.html so it may not be ready at first render.
+function saveSession(user: SignedInUser) {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
+  } catch { /* quota or private mode */ }
+}
+
+function clearSession() {
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch { /* ignore */ }
+}
+
+function loadSession(): SignedInUser | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const user = JSON.parse(raw) as SignedInUser;
+    if (user.expiresAt && Date.now() > user.expiresAt - 60_000) {
+      clearSession();
+      return null;
+    }
+    return user;
+  } catch {
+    return null;
+  }
+}
+
 function useGisReady(): boolean {
   const [ready, setReady] = useState(() => Boolean(window.google?.accounts?.oauth2));
   useEffect(() => {
@@ -42,14 +64,13 @@ function useGisReady(): boolean {
 
 export function useGoogleAuth(): GoogleAuthState {
   const ready = useGisReady();
-  const [user, setUser] = useState<SignedInUser | null>(null);
+  const [user, setUser] = useState<SignedInUser | null>(loadSession);
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const clientRef = useRef<TokenClient | null>(null);
 
   const configured = Boolean(CLIENT_ID);
 
-  // Look up the email behind an access token. Cheap call against userinfo.
   const fetchEmail = useCallback(async (token: string): Promise<string> => {
     const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
       headers: { Authorization: `Bearer ${token}` },
@@ -59,7 +80,6 @@ export function useGoogleAuth(): GoogleAuthState {
     return data.email ?? "unknown";
   }, []);
 
-  // Build the token client lazily, once GIS is ready and CLIENT_ID is present.
   useEffect(() => {
     if (!ready || !configured || clientRef.current) return;
     clientRef.current = window.google!.accounts.oauth2.initTokenClient({
@@ -74,7 +94,9 @@ export function useGoogleAuth(): GoogleAuthState {
         const expiresAt = Date.now() + response.expires_in * 1000;
         fetchEmail(response.access_token)
           .then((email) => {
-            setUser({ email, accessToken: response.access_token, expiresAt });
+            const u = { email, accessToken: response.access_token, expiresAt };
+            setUser(u);
+            saveSession(u);
             setError(null);
           })
           .catch((e: unknown) => {
@@ -92,8 +114,6 @@ export function useGoogleAuth(): GoogleAuthState {
     if (!clientRef.current) return;
     setError(null);
     setSigningIn(true);
-    // 'consent' on first run so the user sees the scopes; subsequent silent
-    // re-auth happens transparently via the same client.
     clientRef.current.requestAccessToken({ prompt: user ? "" : "consent" });
   }, [user]);
 
@@ -102,6 +122,7 @@ export function useGoogleAuth(): GoogleAuthState {
       window.google.accounts.oauth2.revoke(user.accessToken, () => undefined);
     }
     setUser(null);
+    clearSession();
   }, [user]);
 
   return { ready, configured, user, signingIn, error, signIn, signOut };
