@@ -47,17 +47,17 @@ const CONCURRENCY = 6;
 
 function saveCache(data: DashboardData) {
   try {
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
   } catch { /* quota exceeded */ }
 }
 
 function loadCache(): DashboardData | null {
   try {
-    const raw = sessionStorage.getItem(CACHE_KEY);
+    const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const cached = JSON.parse(raw) as DashboardData;
     if (!cached.fetchedAt || Date.now() - cached.fetchedAt > CACHE_MAX_AGE_MS) {
-      sessionStorage.removeItem(CACHE_KEY);
+      localStorage.removeItem(CACHE_KEY);
       return null;
     }
     return { ...cached, loading: false, phase: "cached" };
@@ -67,7 +67,7 @@ function loadCache(): DashboardData | null {
 }
 
 function clearCache() {
-  try { sessionStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
+  try { localStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
 }
 
 async function mapConcurrent<T, R>(

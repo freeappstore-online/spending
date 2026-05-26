@@ -22,19 +22,19 @@ export interface GoogleAuthState {
 
 function saveSession(user: SignedInUser) {
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    localStorage.setItem(SESSION_KEY, JSON.stringify(user));
   } catch { /* quota or private mode */ }
 }
 
 function clearSession() {
   try {
-    sessionStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_KEY);
   } catch { /* ignore */ }
 }
 
 function loadSession(): SignedInUser | null {
   try {
-    const raw = sessionStorage.getItem(SESSION_KEY);
+    const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const user = JSON.parse(raw) as SignedInUser;
     if (user.expiresAt && Date.now() > user.expiresAt - 60_000) {
