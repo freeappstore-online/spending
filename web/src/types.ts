@@ -174,6 +174,7 @@ export interface ParsedBudget {
 export interface DashboardData {
   loading: boolean;
   phase: string;
+  fetchedAt: number | null;
   projects: EnrichedProject[];
   billingAccounts: EnrichedBillingAccount[];
   budgets: ParsedBudget[];

@@ -25,6 +25,7 @@ import {
 const EMPTY: DashboardData = {
   loading: true,
   phase: "starting",
+  fetchedAt: null,
   projects: [],
   billingAccounts: [],
   budgets: [],
@@ -40,7 +41,34 @@ const EMPTY: DashboardData = {
   projectNumberToName: {},
 };
 
+const CACHE_KEY = "gcp-spending-data";
+const CACHE_MAX_AGE_MS = 30 * 60_000; // 30 minutes
 const CONCURRENCY = 6;
+
+function saveCache(data: DashboardData) {
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
+  } catch { /* quota exceeded */ }
+}
+
+function loadCache(): DashboardData | null {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as DashboardData;
+    if (!cached.fetchedAt || Date.now() - cached.fetchedAt > CACHE_MAX_AGE_MS) {
+      sessionStorage.removeItem(CACHE_KEY);
+      return null;
+    }
+    return { ...cached, loading: false, phase: "cached" };
+  } catch {
+    return null;
+  }
+}
+
+function clearCache() {
+  try { sessionStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
+}
 
 async function mapConcurrent<T, R>(
   items: T[],
@@ -58,17 +86,20 @@ async function mapConcurrent<T, R>(
   return results;
 }
 
-export function useGcpData(user: SignedInUser | null): DashboardData {
-  const [data, setData] = useState<DashboardData>(EMPTY);
-  const runRef = useRef(0);
+export interface UseGcpDataResult extends DashboardData {
+  refresh: () => void;
+}
 
-  useEffect(() => {
-    if (!user) {
-      setData(EMPTY);
-      return;
-    }
+export function useGcpData(user: SignedInUser | null): UseGcpDataResult {
+  const [data, setData] = useState<DashboardData>(() => loadCache() || EMPTY);
+  const runRef = useRef(0);
+  const fetchingRef = useRef(false);
+
+  const doFetch = (u: SignedInUser) => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
     const run = ++runRef.current;
-    const token = user.accessToken;
+    const token = u.accessToken;
     const errors: DataError[] = [];
 
     const alive = () => run === runRef.current;
@@ -77,7 +108,7 @@ export function useGcpData(user: SignedInUser | null): DashboardData {
       try {
 
       const checkToken = () => {
-        if (user.expiresAt && Date.now() > user.expiresAt - 60_000) {
+        if (u.expiresAt && Date.now() > u.expiresAt - 60_000) {
           throw new Error("OAuth token expired or expiring. Please sign in again.");
         }
       };
@@ -294,9 +325,10 @@ export function useGcpData(user: SignedInUser | null): DashboardData {
         (p) => p.lifecycleState === "ACTIVE" && p.billingLinked && !p.budgetCovered,
       ).length;
 
-      setData({
+      const result: DashboardData = {
         loading: false,
         phase: "done",
+        fetchedAt: Date.now(),
         projects: enrichedProjects,
         billingAccounts: enrichedBilling,
         budgets: allBudgets,
@@ -310,18 +342,41 @@ export function useGcpData(user: SignedInUser | null): DashboardData {
         budgetCoverage: { uncoveredCount },
         projectNames,
         projectNumberToName,
-      });
+      };
+      setData(result);
+      saveCache(result);
 
       } catch (e) {
         if (alive()) {
           errors.push({ context: "fatal", message: String(e) });
-          setData((d) => ({ ...d, loading: false, phase: "error", errors: [...d.errors, ...errors] }));
+          setData((d) => ({ ...d, loading: false, phase: "error", fetchedAt: null, errors: [...d.errors, ...errors] }));
         }
+      } finally {
+        fetchingRef.current = false;
       }
     })();
-  }, [user]);
+  };
 
-  return data;
+  useEffect(() => {
+    if (!user) {
+      setData(EMPTY);
+      clearCache();
+      return;
+    }
+    // Only fetch if we don't have cached data
+    if (!data.fetchedAt) {
+      doFetch(user);
+    }
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refresh = () => {
+    if (user) {
+      clearCache();
+      doFetch(user);
+    }
+  };
+
+  return { ...data, refresh };
 }
 
 function isOlderThan6Months(createTime?: string): boolean {

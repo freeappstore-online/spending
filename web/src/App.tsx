@@ -4,9 +4,9 @@ import { useGoogleAuth } from "./hooks/useGoogleAuth";
 import { useHash } from "./hooks/useHash";
 import { useGcpData } from "./hooks/useGcpData";
 import { Overview } from "./pages/Overview";
+import { Projects } from "./pages/Projects";
 
 void new FreeAppStore({ appId: "gcp-spending" });
-import { Projects } from "./pages/Projects";
 import { Billing } from "./pages/Billing";
 import { Budgets } from "./pages/Budgets";
 import { Resources } from "./pages/Resources";
@@ -35,11 +35,7 @@ export default function App() {
       {auth.configured && !auth.user && <SignInScreen auth={auth} />}
       {signedIn && (
         <>
-          {data.loading && (
-            <div className="mb-4 text-sm" style={{ color: "var(--muted)" }}>
-              {data.phase}
-            </div>
-          )}
+          <StatusBar loading={data.loading} phase={data.phase} fetchedAt={data.fetchedAt} onRefresh={data.refresh} />
           {tab === "overview" && <Overview data={data} />}
           {tab === "projects" && <Projects data={data} />}
           {tab === "billing" && <Billing data={data} />}
@@ -107,4 +103,43 @@ function SignInScreen({ auth }: { auth: ReturnType<typeof useGoogleAuth> }) {
       </p>
     </div>
   );
+}
+
+function StatusBar({ loading, phase, fetchedAt, onRefresh }: {
+  loading: boolean;
+  phase: string;
+  fetchedAt: number | null;
+  onRefresh: () => void;
+}) {
+  const ago = fetchedAt ? formatAgo(Date.now() - fetchedAt) : null;
+  return (
+    <div className="flex items-center gap-3 mb-5 text-xs" style={{ color: "var(--muted)" }}>
+      {loading && <span>{phase}</span>}
+      {!loading && ago && <span>Data from {ago} ago</span>}
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={loading}
+        className="px-3 py-1 rounded-lg text-xs"
+        style={{
+          background: "var(--panel)",
+          border: "1px solid var(--line)",
+          color: loading ? "var(--muted)" : "var(--accent)",
+          cursor: loading ? "not-allowed" : "pointer",
+          fontFamily: "inherit",
+          opacity: loading ? 0.5 : 1,
+        }}
+      >
+        {loading ? "Fetching..." : "Refresh"}
+      </button>
+    </div>
+  );
+}
+
+function formatAgo(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
