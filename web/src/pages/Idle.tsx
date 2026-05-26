@@ -53,7 +53,7 @@ export function Idle({ data }: Props) {
             ))}
             {rows.length === 0 && (
               <tr>
-                <Td muted>No projects match the idle heuristic.</Td>
+                <Td muted colSpan={4}>No projects match the idle heuristic.</Td>
               </tr>
             )}
           </tbody>

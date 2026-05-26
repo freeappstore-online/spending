@@ -37,6 +37,7 @@ const EMPTY: DashboardData = {
   errors: [],
   budgetCoverage: { uncoveredCount: 0 },
   projectNames: {},
+  projectNumberToName: {},
 };
 
 const CONCURRENCY = 6;
@@ -73,6 +74,14 @@ export function useGcpData(user: SignedInUser | null): DashboardData {
     const alive = () => run === runRef.current;
 
     (async () => {
+      try {
+
+      const checkToken = () => {
+        if (user.expiresAt && Date.now() > user.expiresAt - 60_000) {
+          throw new Error("OAuth token expired or expiring. Please sign in again.");
+        }
+      };
+
       setData((d) => ({ ...d, loading: true, phase: "Fetching projects and billing accounts..." }));
 
       // Phase 1: projects + billing accounts in parallel
@@ -88,6 +97,7 @@ export function useGcpData(user: SignedInUser | null): DashboardData {
       ]);
 
       if (!alive()) return;
+      checkToken();
 
       const activeProjects = rawProjects.filter((p) => p.lifecycleState === "ACTIVE");
 
@@ -96,11 +106,17 @@ export function useGcpData(user: SignedInUser | null): DashboardData {
         phase: `Fetching billing info for ${activeProjects.length} projects...`,
       }));
 
-      // Phase 2: per-project billing info
-      const billingInfos = await mapConcurrent(activeProjects, (p) =>
-        getProjectBillingInfo(token, p.projectId),
-      );
+      // Phase 2: per-project billing info (report errors instead of swallowing)
+      const billingInfos = await mapConcurrent(activeProjects, async (p) => {
+        try {
+          return await getProjectBillingInfo(token, p.projectId);
+        } catch (e) {
+          errors.push({ context: `billingInfo(${p.projectId})`, message: String(e) });
+          return { projectId: p.projectId, billingEnabled: false } as import("../lib/gcp").BillingInfo;
+        }
+      });
       if (!alive()) return;
+      checkToken();
 
       // Phase 3: budgets per billing account
       setData((d) => ({ ...d, phase: "Fetching budgets..." }));
@@ -115,6 +131,7 @@ export function useGcpData(user: SignedInUser | null): DashboardData {
         allBudgets.push(...budgets);
       });
       if (!alive()) return;
+      checkToken();
 
       // Phase 4: per-project details (APIs, resources, Firestore) - parallel with concurrency limit
       setData((d) => ({
@@ -182,12 +199,14 @@ export function useGcpData(user: SignedInUser | null): DashboardData {
         }
       }
 
-      // Project names
+      // Project names + number-to-name mapping for budget scope display
       const projectNames: Record<string, string> = {};
+      const projectNumberToName: Record<string, string> = {};
       for (const p of rawProjects) {
         if (p.name && p.name !== p.projectId) {
           projectNames[p.projectId] = p.name;
         }
+        projectNumberToName[p.projectNumber] = p.name || p.projectId;
       }
 
       // Enriched projects
@@ -290,7 +309,15 @@ export function useGcpData(user: SignedInUser | null): DashboardData {
         errors,
         budgetCoverage: { uncoveredCount },
         projectNames,
+        projectNumberToName,
       });
+
+      } catch (e) {
+        if (alive()) {
+          errors.push({ context: "fatal", message: String(e) });
+          setData((d) => ({ ...d, loading: false, phase: "error", errors: [...d.errors, ...errors] }));
+        }
+      }
     })();
   }, [user]);
 

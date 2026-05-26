@@ -76,7 +76,7 @@ export function Apis({ data }: Props) {
             ))}
             {rows.length === 0 && (
               <tr>
-                <Td muted>No APIs match the filter.</Td>
+                <Td muted colSpan={3}>No APIs match the filter.</Td>
               </tr>
             )}
           </tbody>

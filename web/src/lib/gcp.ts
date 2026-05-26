@@ -96,10 +96,9 @@ export async function getProjectBillingInfo(
   token: string,
   projectId: string,
 ): Promise<BillingInfo> {
-  return gcpFetchSafe<BillingInfo>(
+  return gcpFetch<BillingInfo>(
     token,
     `https://cloudbilling.googleapis.com/v1/projects/${projectId}/billingInfo`,
-    { projectId, billingEnabled: false },
   );
 }
 

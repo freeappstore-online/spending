@@ -36,15 +36,18 @@ export function Td({
   children,
   num,
   muted,
+  colSpan,
   style,
 }: {
   children: ReactNode;
   num?: boolean;
   muted?: boolean;
+  colSpan?: number;
   style?: React.CSSProperties;
 }) {
   return (
     <td
+      colSpan={colSpan}
       className="px-3 py-2.5 text-sm whitespace-nowrap"
       style={{
         textAlign: num ? "right" : "left",

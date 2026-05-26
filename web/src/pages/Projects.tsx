@@ -115,7 +115,7 @@ export function Projects({ data }: Props) {
             ))}
             {rows.length === 0 && (
               <tr>
-                <Td muted>
+                <Td muted colSpan={9}>
                   No projects match the filter.
                 </Td>
               </tr>

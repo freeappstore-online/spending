@@ -25,8 +25,15 @@ export function Billing({ data }: Props) {
       </h1>
 
       {data.billingAccounts.map((ba) => {
-        const budgetTotal = ba.budgets.reduce((sum, b) => sum + (b.amount || 0), 0);
-        const currency = ba.budgets[0]?.currency || "";
+        const byCcy: Record<string, number> = {};
+        for (const b of ba.budgets) {
+          if (b.amount != null && b.currency) {
+            byCcy[b.currency] = (byCcy[b.currency] || 0) + b.amount;
+          }
+        }
+        const budgetTotalStr = Object.entries(byCcy)
+          .map(([ccy, amt]) => `${fmtMoney(amt)} ${ccy}`)
+          .join(" / ") || "--";
 
         return (
           <div
@@ -72,16 +79,16 @@ export function Billing({ data }: Props) {
 
             <div className="text-sm mb-2">
               <strong>{ba.budgets.length}</strong> budget{ba.budgets.length === 1 ? "" : "s"}
-              {currency && (
+              {budgetTotalStr !== "--" && (
                 <span className="ml-2" style={{ color: "var(--muted)" }}>
-                  total {fmtMoney(budgetTotal)} {currency}/mo
+                  total {budgetTotalStr}/mo
                 </span>
               )}
             </div>
             {ba.budgets.length > 0 && (
               <div className="flex flex-col gap-2 mt-2">
                 {ba.budgets.map((b, i) => (
-                  <BudgetItem key={i} budget={b} projectNames={data.projectNames} />
+                  <BudgetItem key={i} budget={b} projectNumberToName={data.projectNumberToName} />
                 ))}
               </div>
             )}
@@ -94,14 +101,14 @@ export function Billing({ data }: Props) {
 
 function BudgetItem({
   budget,
-  projectNames,
+  projectNumberToName,
 }: {
   budget: DashboardData["budgets"][0];
-  projectNames: Record<string, string>;
+  projectNumberToName: Record<string, string>;
 }) {
   const scope =
     budget.projectNumbers.length > 0
-      ? budget.projectNumbers.map((n) => projectNames[n] || n).join(", ")
+      ? budget.projectNumbers.map((n) => projectNumberToName[n] || n).join(", ")
       : "whole billing account";
   const thresholds = budget.thresholds.map((t) => `${Math.round(t.percent)}%`).join(" / ");
   const amt = budget.amount != null ? `${fmtMoney(budget.amount)} ${budget.currency}` : "--";

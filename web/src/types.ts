@@ -186,6 +186,7 @@ export interface DashboardData {
   errors: DataError[];
   budgetCoverage: { uncoveredCount: number };
   projectNames: Record<string, string>;
+  projectNumberToName: Record<string, string>;
 }
 
 export type TabId =

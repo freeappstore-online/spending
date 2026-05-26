@@ -21,14 +21,14 @@ export function Budgets({ data }: Props) {
   const rows = data.budgets
     .filter((b) => {
       if (!q) return true;
-      const scope = b.projectNumbers.map((n) => data.projectNames[n] || n).join(" ");
+      const scope = b.projectNumbers.map((n) => data.projectNumberToName[n] || n).join(" ");
       return (
         b.displayName.toLowerCase().includes(q) ||
         (b.billingAccountDisplayName || "").toLowerCase().includes(q) ||
         scope.toLowerCase().includes(q)
       );
     })
-    .sort((a, b) => (b.amount || 0) - (a.amount || 0));
+    .sort((a, b) => (b.amount ?? -1) - (a.amount ?? -1));
 
   return (
     <div>
@@ -79,7 +79,7 @@ export function Budgets({ data }: Props) {
             {rows.map((b, i) => {
               const scope =
                 b.projectNumbers.length > 0
-                  ? b.projectNumbers.map((n) => data.projectNames[n] || n).join(", ")
+                  ? b.projectNumbers.map((n) => data.projectNumberToName[n] || n).join(", ")
                   : "whole billing account";
               const amt = b.amount != null ? `${fmtMoney(b.amount)} ${b.currency}` : "--";
               return (
@@ -107,7 +107,7 @@ export function Budgets({ data }: Props) {
             })}
             {rows.length === 0 && (
               <tr>
-                <Td muted>No budgets found.</Td>
+                <Td muted colSpan={5}>No budgets found.</Td>
               </tr>
             )}
           </tbody>

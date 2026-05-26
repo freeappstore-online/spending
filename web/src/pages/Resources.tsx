@@ -118,12 +118,12 @@ export function Resources({ data }: Props) {
             })}
             {rows.length > 500 && (
               <tr>
-                <Td muted>...{rows.length - 500} more (narrow the filter)</Td>
+                <Td muted colSpan={5}>...{rows.length - 500} more (narrow the filter)</Td>
               </tr>
             )}
             {rows.length === 0 && (
               <tr>
-                <Td muted>No resources discovered.</Td>
+                <Td muted colSpan={5}>No resources discovered.</Td>
               </tr>
             )}
           </tbody>
