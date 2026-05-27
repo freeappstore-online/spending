@@ -22,7 +22,10 @@ import {
   listFirestoreDatabases,
   discoverBillingExportTables,
   querySpendForTable,
+  fetchMonitoringSeries,
+  MONITORING_METRICS,
   type SpendResult,
+  type MetricSeries,
 } from "../lib/gcp";
 
 const EMPTY: DashboardData = {
@@ -40,9 +43,11 @@ const EMPTY: DashboardData = {
   issues: [],
   errors: [],
   spend: { loading: false, results: [] },
+  monitoring: { loading: false, config: [], byProject: {}, leaderboard: {}, windowHours: 48 },
   budgetCoverage: { uncoveredCount: 0 },
   projectNames: {},
   projectNumberToName: {},
+  projectNumberToId: {},
 };
 
 const CACHE_KEY = "gcp-spending-data";
@@ -237,11 +242,13 @@ export function useGcpData(user: SignedInUser | null): UseGcpDataResult {
       // Project names + number-to-name mapping for budget scope display
       const projectNames: Record<string, string> = {};
       const projectNumberToName: Record<string, string> = {};
+      const projectNumberToId: Record<string, string> = {};
       for (const p of rawProjects) {
         if (p.name && p.name !== p.projectId) {
           projectNames[p.projectId] = p.name;
         }
         projectNumberToName[p.projectNumber] = p.name || p.projectId;
+        projectNumberToId[p.projectNumber] = p.projectId;
       }
 
       // Enriched projects
@@ -357,6 +364,53 @@ export function useGcpData(user: SignedInUser | null): UseGcpDataResult {
       }
       if (!alive()) return;
 
+      // Phase 6: Cloud Monitoring — sample a few metrics on projects with resources.
+      // 45 projects × 5 metrics = 225 API calls; limit concurrency hard.
+      setData((d) => ({ ...d, phase: "Fetching live metrics..." }));
+
+      const monitoringProjects = enrichedProjects
+        .filter((p) =>
+          p.lifecycleState === "ACTIVE" && (p.resourceCount > 0 || p.firestoreDatabases.length > 0),
+        )
+        .map((p) => p.projectId);
+
+      const monitoringByProject: Record<string, Record<string, MetricSeries[]>> = {};
+      const monitoringLeaderboard: Record<string, { projectId: string; total: number }[]> = {};
+
+      const monitoringTasks: { projectId: string; metric: typeof MONITORING_METRICS[0] }[] = [];
+      for (const pid of monitoringProjects) {
+        for (const mc of MONITORING_METRICS) {
+          monitoringTasks.push({ projectId: pid, metric: mc });
+        }
+      }
+
+      await mapConcurrent(monitoringTasks, async ({ projectId, metric }) => {
+        try {
+          const series = await fetchMonitoringSeries(token, projectId, metric);
+          if (series.length === 0) return;
+          monitoringByProject[projectId] ??= {};
+          monitoringByProject[projectId][metric.key] = series;
+          // Total across all sub-series for the leaderboard
+          let total = 0;
+          for (const s of series) {
+            for (const pt of s.points) total += pt.v;
+          }
+          if (total > 0) {
+            monitoringLeaderboard[metric.key] ??= [];
+            monitoringLeaderboard[metric.key]!.push({ projectId, total });
+          }
+        } catch (e) {
+          // Most monitoring failures are "API not enabled" — silent
+          if (!/HTTP 40[034]/.test(String(e))) {
+            errors.push({ context: `monitoring(${projectId},${metric.key})`, message: String(e) });
+          }
+        }
+      });
+      for (const k of Object.keys(monitoringLeaderboard)) {
+        monitoringLeaderboard[k]!.sort((a, b) => b.total - a.total);
+      }
+      if (!alive()) return;
+
       const result: DashboardData = {
         loading: false,
         phase: "done",
@@ -372,9 +426,17 @@ export function useGcpData(user: SignedInUser | null): UseGcpDataResult {
         issues,
         errors,
         spend: { loading: false, results: spendResults },
+        monitoring: {
+          loading: false,
+          config: MONITORING_METRICS.map((m) => ({ key: m.key, label: m.label })),
+          byProject: monitoringByProject,
+          leaderboard: monitoringLeaderboard,
+          windowHours: 48,
+        },
         budgetCoverage: { uncoveredCount },
         projectNames,
         projectNumberToName,
+        projectNumberToId,
       };
       setData(result);
       saveCache(result);

@@ -186,9 +186,11 @@ export interface DashboardData {
   issues: Issue[];
   errors: DataError[];
   spend: SpendData;
+  monitoring: MonitoringData;
   budgetCoverage: { uncoveredCount: number };
   projectNames: Record<string, string>;
   projectNumberToName: Record<string, string>;
+  projectNumberToId: Record<string, string>;
 }
 
 export interface SpendResult {
@@ -211,9 +213,30 @@ export interface SpendData {
   results: SpendResult[];
 }
 
+export interface MetricPoint {
+  t: string;
+  v: number;
+}
+
+export interface MetricSeries {
+  labels: Record<string, string>;
+  points: MetricPoint[];
+}
+
+export interface MonitoringData {
+  loading: boolean;
+  config: { key: string; label: string }[];
+  /** projectId -> metricKey -> series[] */
+  byProject: Record<string, Record<string, MetricSeries[]>>;
+  /** metricKey -> rows sorted by total desc */
+  leaderboard: Record<string, { projectId: string; total: number }[]>;
+  windowHours: number;
+}
+
 export type TabId =
   | "overview"
   | "spend"
+  | "live"
   | "projects"
   | "billing"
   | "budgets"

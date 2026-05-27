@@ -489,6 +489,79 @@ async function bqQuery(
 export type { SpendResult } from "../types";
 import type { SpendResult } from "../types";
 
+// --- Cloud Monitoring ---
+
+export interface MetricConfig {
+  key: string;
+  label: string;
+  metric: string;
+  aligner: "ALIGN_SUM" | "ALIGN_MEAN" | "ALIGN_RATE";
+  reducer?: "REDUCE_SUM" | "REDUCE_MEAN";
+}
+
+export const MONITORING_METRICS: MetricConfig[] = [
+  { key: "firestore_reads", label: "Firestore reads", metric: "firestore.googleapis.com/document/read_count", aligner: "ALIGN_SUM", reducer: "REDUCE_SUM" },
+  { key: "firestore_writes", label: "Firestore writes", metric: "firestore.googleapis.com/document/write_count", aligner: "ALIGN_SUM", reducer: "REDUCE_SUM" },
+  { key: "cloud_run_requests", label: "Cloud Run requests", metric: "run.googleapis.com/request_count", aligner: "ALIGN_SUM", reducer: "REDUCE_SUM" },
+  { key: "cloud_functions_executions", label: "Cloud Functions executions", metric: "cloudfunctions.googleapis.com/function/execution_count", aligner: "ALIGN_SUM", reducer: "REDUCE_SUM" },
+  { key: "pubsub_messages", label: "Pub/Sub messages", metric: "pubsub.googleapis.com/subscription/sent_message_count", aligner: "ALIGN_SUM", reducer: "REDUCE_SUM" },
+];
+
+export interface MetricPoint {
+  t: string; // ISO timestamp
+  v: number;
+}
+
+export interface MetricSeries {
+  labels: Record<string, string>;
+  points: MetricPoint[];
+}
+
+interface MonitoringResponse {
+  timeSeries?: {
+    resource?: { labels?: Record<string, string> };
+    points?: {
+      interval?: { startTime?: string; endTime?: string };
+      value?: { int64Value?: string; doubleValue?: number };
+    }[];
+  }[];
+}
+
+export async function fetchMonitoringSeries(
+  token: string,
+  projectId: string,
+  metric: MetricConfig,
+  windowHours = 48,
+): Promise<MetricSeries[]> {
+  const now = new Date();
+  const start = new Date(now.getTime() - windowHours * 3600 * 1000);
+  const params = new URLSearchParams();
+  params.set("filter", `metric.type="${metric.metric}"`);
+  params.set("interval.startTime", start.toISOString().replace(/\.\d{3}Z$/, "Z"));
+  params.set("interval.endTime", now.toISOString().replace(/\.\d{3}Z$/, "Z"));
+  params.set("aggregation.alignmentPeriod", "3600s");
+  params.set("aggregation.perSeriesAligner", metric.aligner);
+  if (metric.reducer) params.set("aggregation.crossSeriesReducer", metric.reducer);
+
+  const url = `https://monitoring.googleapis.com/v3/projects/${projectId}/timeSeries?${params}`;
+  const data = await gcpFetchSafe<MonitoringResponse>(token, url, {});
+  if (!data.timeSeries) return [];
+
+  return data.timeSeries.map((ts) => {
+    const labels = ts.resource?.labels || {};
+    const useful: Record<string, string> = {};
+    for (const [k, v] of Object.entries(labels)) {
+      if (k !== "project_id") useful[k] = v;
+    }
+    const points: MetricPoint[] = (ts.points || []).map((pt) => {
+      const t = pt.interval?.endTime || pt.interval?.startTime || "";
+      const v = Number(pt.value?.int64Value || pt.value?.doubleValue || 0);
+      return { t, v: isFinite(v) ? v : 0 };
+    }).sort((a, b) => a.t.localeCompare(b.t));
+    return { labels: useful, points };
+  });
+}
+
 export async function querySpendForTable(
   token: string,
   table: BillingExportTable,

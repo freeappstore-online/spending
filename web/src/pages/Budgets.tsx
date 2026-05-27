@@ -3,6 +3,7 @@ import type { DashboardData } from "../types";
 import { Card, CardGrid } from "../components/Card";
 import { TableWrap, Th, Td, Pill } from "../components/Table";
 import { fmtMoney } from "../lib/fmt";
+import { aggregateSpend, computeBudgetActuals, type BudgetActual } from "../lib/spend";
 
 interface Props {
   data: DashboardData;
@@ -16,6 +17,9 @@ export function Budgets({ data }: Props) {
     if (b.amount == null || !b.currency) continue;
     totals[b.currency] = (totals[b.currency] || 0) + b.amount;
   }
+
+  const agg = data.spend.results.length > 0 ? aggregateSpend(data.spend.results) : null;
+  const actuals = agg ? computeBudgetActuals(data.budgets, agg, data.projectNumberToId) : [];
 
   const q = filter.toLowerCase();
   const rows = data.budgets
@@ -46,12 +50,30 @@ export function Budgets({ data }: Props) {
           value={data.budgetCoverage.uncoveredCount}
           warn={data.budgetCoverage.uncoveredCount > 0}
         />
+        {actuals.length > 0 && (
+          <Card
+            label="Over budget"
+            value={actuals.filter((a) => a.status === "over").length}
+            warn={actuals.some((a) => a.status === "over")}
+          />
+        )}
       </CardGrid>
 
+      {/* Budget vs actual */}
+      {actuals.length > 0 && (
+        <BudgetActualSection actuals={actuals} />
+      )}
+
+      <h3
+        className="text-xs uppercase tracking-wider font-medium mt-8 mb-3"
+        style={{ color: "var(--muted)", letterSpacing: "0.08em" }}
+      >
+        All budgets
+      </h3>
       <div className="mb-4">
         <input
           type="search"
-          placeholder="Filter budgets by name, project, billing account..."
+          placeholder="Filter budgets..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           className="w-full max-w-md px-3 py-2 rounded-lg text-sm"
@@ -113,10 +135,79 @@ export function Budgets({ data }: Props) {
           </tbody>
         </table>
       </TableWrap>
+    </div>
+  );
+}
 
-      <p className="text-xs mt-4" style={{ color: "var(--muted)" }}>
-        Uncovered projects (no budget) are listed in the Projects tab.
-      </p>
+function BudgetActualSection({ actuals }: { actuals: BudgetActual[] }) {
+  return (
+    <>
+      <h3
+        className="text-xs uppercase tracking-wider font-medium mb-3 mt-2"
+        style={{ color: "var(--muted)", letterSpacing: "0.08em" }}
+      >
+        Budget vs actual — this month
+      </h3>
+      <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))" }}>
+        {actuals.map((a, i) => (
+          <BudgetActualCard key={i} a={a} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function BudgetActualCard({ a }: { a: BudgetActual }) {
+  const barColor =
+    a.status === "over" ? "var(--error)" :
+    a.status === "warn" ? "var(--warning)" :
+    "var(--success)";
+  const remaining = a.amount - a.actualSpend;
+  return (
+    <div
+      className="rounded-xl p-4"
+      style={{
+        background: "var(--panel)",
+        border: "1px solid var(--line)",
+        borderLeftWidth: 4,
+        borderLeftColor: barColor,
+      }}
+    >
+      <div className="flex justify-between items-baseline mb-2 gap-2 flex-wrap">
+        <div className="font-medium text-sm">{a.displayName}</div>
+        <div className="text-xs" style={{ color: "var(--muted)" }}>
+          {a.scope.length > 40 ? a.scope.slice(0, 38) + "..." : a.scope}
+        </div>
+      </div>
+      <div className="flex justify-between items-baseline mb-2 tabular-nums">
+        <span style={{ color: barColor, fontWeight: 600 }}>
+          ${fmtMoney(a.actualSpend)} {a.currency}
+        </span>
+        <span className="text-sm" style={{ color: "var(--muted)" }}>
+          / ${fmtMoney(a.amount)}
+        </span>
+      </div>
+      <div
+        className="h-2 rounded-full overflow-hidden mb-1"
+        style={{ background: "var(--line)" }}
+      >
+        <div
+          style={{
+            width: `${Math.min(100, a.percentUsed)}%`,
+            height: "100%",
+            background: barColor,
+            transition: "width 0.3s",
+          }}
+        />
+      </div>
+      <div className="flex justify-between text-xs" style={{ color: "var(--muted)" }}>
+        <span>{a.percentUsed.toFixed(0)}% used</span>
+        <span>
+          {remaining >= 0
+            ? `$${fmtMoney(remaining)} left`
+            : `$${fmtMoney(-remaining)} over`}
+        </span>
+      </div>
     </div>
   );
 }

@@ -148,3 +148,72 @@ export function getBleeds(agg: SpendAgg): BleedRow[] {
     .sort((a, b) => b.avg - a.avg)
     .slice(0, 15);
 }
+
+// --- Budget vs actual ---
+
+export interface BudgetActual {
+  displayName: string;
+  amount: number;
+  currency: string;
+  scope: string; // "whole account" or "proj-a, proj-b, ..."
+  actualSpend: number;
+  percentUsed: number; // 0-Infinity
+  status: "ok" | "warn" | "over"; // <50%, 50-100%, >100%
+}
+
+/**
+ * Compute actual spend against each budget for the current month.
+ * Budgets without a known currency or no amount are skipped.
+ * Budget scope is the union of: explicit projectNumbers (translated to
+ * projectIds via projectNumberToId), or the whole billing account.
+ */
+export function computeBudgetActuals(
+  budgets: {
+    displayName: string;
+    amount: number | null;
+    currency: string;
+    projectNumbers: string[];
+  }[],
+  agg: SpendAgg,
+  projectNumberToId: Record<string, string>,
+): BudgetActual[] {
+  const months = Object.keys(agg.byMonthAll).sort();
+  const thisMonth = months[months.length - 1];
+
+  return budgets
+    .filter((b) => b.amount != null && b.amount > 0)
+    .map((b) => {
+      let actualSpend = 0;
+      let scope: string;
+      if (b.projectNumbers.length > 0) {
+        // Sum spend across the specific projects in scope, for this month
+        const projectIds = b.projectNumbers.map((n) => projectNumberToId[n] || n);
+        scope = projectIds.join(", ");
+        if (thisMonth) {
+          for (const pid of projectIds) {
+            actualSpend += agg.byProjectMonth[pid]?.[thisMonth] || 0;
+          }
+        }
+      } else {
+        // Whole-account budget: sum everything for this month
+        scope = "whole billing account";
+        actualSpend = thisMonth ? agg.byMonthAll[thisMonth] || 0 : 0;
+      }
+
+      const amount = b.amount!;
+      const percentUsed = (actualSpend / amount) * 100;
+      const status: BudgetActual["status"] =
+        percentUsed > 100 ? "over" : percentUsed >= 50 ? "warn" : "ok";
+
+      return {
+        displayName: b.displayName,
+        amount,
+        currency: b.currency,
+        scope,
+        actualSpend,
+        percentUsed,
+        status,
+      };
+    })
+    .sort((a, b) => b.percentUsed - a.percentUsed);
+}

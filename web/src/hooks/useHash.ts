@@ -4,6 +4,7 @@ import type { TabId } from "../types";
 const TABS: TabId[] = [
   "overview",
   "spend",
+  "live",
   "projects",
   "billing",
   "budgets",

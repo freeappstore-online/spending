@@ -3,7 +3,7 @@ import { Card, CardGrid } from "../components/Card";
 import { SimpleBarChart, AreaLineChart, DonutChart, ChartCard, Grid2 } from "../components/Chart";
 import { TableWrap, Th, Td, Pill, ExternalLink } from "../components/Table";
 import { fmtMoney, pLabel } from "../lib/fmt";
-import { aggregateSpend, getMoneyCards, getBleeds } from "../lib/spend";
+import { aggregateSpend, getMoneyCards, getBleeds, computeBudgetActuals } from "../lib/spend";
 
 interface Props {
   data: DashboardData;
@@ -14,6 +14,8 @@ export function Overview({ data }: Props) {
   const agg = hasSpend ? aggregateSpend(data.spend.results) : null;
   const money = agg ? getMoneyCards(agg) : null;
   const bleeds = agg ? getBleeds(agg) : [];
+  const budgetActuals = agg ? computeBudgetActuals(data.budgets, agg, data.projectNumberToId) : [];
+  const budgetAlerts = budgetActuals.filter((b) => b.status === "over" || b.status === "warn");
 
   const activeProjects = data.projects.filter((p) => p.lifecycleState === "ACTIVE");
 
@@ -63,6 +65,11 @@ export function Overview({ data }: Props) {
             )}
           </CardGrid>
         </>
+      )}
+
+      {/* Budget alerts */}
+      {budgetAlerts.length > 0 && (
+        <BudgetAlerts alerts={budgetAlerts} />
       )}
 
       {/* Daily spend chart */}
@@ -294,6 +301,45 @@ const RESOURCE_LABELS: Record<string, string> = {
   gke_clusters: "GKE clusters",
   pubsub_topics: "Pub/Sub topics",
 };
+
+function BudgetAlerts({ alerts }: { alerts: ReturnType<typeof computeBudgetActuals> }) {
+  return (
+    <div className="mt-6">
+      <SectionHead>Budget alerts</SectionHead>
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))" }}>
+        {alerts.map((a, i) => {
+          const barColor =
+            a.status === "over" ? "var(--error)" :
+            a.status === "warn" ? "var(--warning)" :
+            "var(--success)";
+          return (
+            <div
+              key={i}
+              className="rounded-xl p-3"
+              style={{ background: "var(--panel)", border: "1px solid var(--line)", borderLeftWidth: 4, borderLeftColor: barColor }}
+            >
+              <div className="flex justify-between items-baseline mb-2 gap-2 flex-wrap">
+                <span className="font-medium text-sm">{a.displayName}</span>
+                <span className="text-xs tabular-nums" style={{ color: barColor, fontWeight: 600 }}>
+                  {a.percentUsed.toFixed(0)}% used
+                </span>
+              </div>
+              <div
+                className="h-1.5 rounded-full overflow-hidden mb-1"
+                style={{ background: "var(--line)" }}
+              >
+                <div style={{ width: `${Math.min(100, a.percentUsed)}%`, height: "100%", background: barColor }} />
+              </div>
+              <div className="text-xs tabular-nums" style={{ color: "var(--muted)" }}>
+                ${fmtMoney(a.actualSpend)} of ${fmtMoney(a.amount)} {a.currency}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function sumBudgetsByCurrency(
   budgets: { amount: number | null; currency: string }[],

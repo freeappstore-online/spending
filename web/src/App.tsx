@@ -10,6 +10,7 @@ new FreeAppStore({ appId: "gcp-spending" });
 
 const Overview = lazy(() => import("./pages/Overview").then((m) => ({ default: m.Overview })));
 const Spend = lazy(() => import("./pages/Spend").then((m) => ({ default: m.Spend })));
+const Live = lazy(() => import("./pages/Live").then((m) => ({ default: m.Live })));
 const Projects = lazy(() => import("./pages/Projects").then((m) => ({ default: m.Projects })));
 const Billing = lazy(() => import("./pages/Billing").then((m) => ({ default: m.Billing })));
 const Budgets = lazy(() => import("./pages/Budgets").then((m) => ({ default: m.Budgets })));
@@ -52,6 +53,7 @@ export default function App() {
           <Suspense fallback={<PageFallback />}>
             {tab === "overview" && <Overview data={data} />}
             {tab === "spend" && <Spend data={data} />}
+            {tab === "live" && <Live data={data} />}
             {tab === "projects" && <Projects data={data} />}
             {tab === "billing" && <Billing data={data} />}
             {tab === "budgets" && <Budgets data={data} />}

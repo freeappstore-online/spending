@@ -13,6 +13,7 @@ interface ShellProps {
 const TABS: { id: TabId; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "spend", label: "Spend" },
+  { id: "live", label: "Live" },
   { id: "projects", label: "Projects" },
   { id: "billing", label: "Billing" },
   { id: "budgets", label: "Budgets" },
