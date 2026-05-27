@@ -401,3 +401,181 @@ export async function listFirestoreDatabases(
   );
   return data.databases || [];
 }
+
+// --- BigQuery (billing export discovery + cost queries) ---
+
+const BILLING_TABLE_RE = /^gcp_billing_export_v\d+_/;
+
+interface BqDataset {
+  datasetReference: { datasetId: string };
+}
+
+interface BqTable {
+  tableReference: { tableId: string };
+}
+
+export interface BillingExportTable {
+  projectId: string;
+  datasetId: string;
+  tableId: string;
+}
+
+export async function discoverBillingExportTables(
+  token: string,
+  projectIds: string[],
+): Promise<BillingExportTable[]> {
+  const tables: BillingExportTable[] = [];
+  for (const pid of projectIds) {
+    const dsData = await gcpFetchSafe<{ datasets?: BqDataset[] }>(
+      token,
+      `https://bigquery.googleapis.com/bigquery/v2/projects/${pid}/datasets`,
+      {},
+    );
+    for (const ds of dsData.datasets || []) {
+      const dsId = ds.datasetReference.datasetId;
+      const tData = await gcpFetchSafe<{ tables?: BqTable[] }>(
+        token,
+        `https://bigquery.googleapis.com/bigquery/v2/projects/${pid}/datasets/${dsId}/tables`,
+        {},
+      );
+      for (const t of tData.tables || []) {
+        const tid = t.tableReference.tableId;
+        if (BILLING_TABLE_RE.test(tid)) {
+          tables.push({ projectId: pid, datasetId: dsId, tableId: tid });
+        }
+      }
+    }
+  }
+  return tables;
+}
+
+interface BqQueryResponse {
+  schema?: { fields?: { name: string }[] };
+  rows?: { f: { v: string | null }[] }[];
+  jobComplete?: boolean;
+  totalRows?: string;
+}
+
+async function bqQuery(
+  token: string,
+  billingProjectId: string,
+  sql: string,
+): Promise<Record<string, string | null>[]> {
+  const url = `https://bigquery.googleapis.com/bigquery/v2/projects/${billingProjectId}/queries`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query: sql, useLegacySql: false, timeoutMs: 60000 }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new GcpError(res.status, url, body || res.statusText);
+  }
+  const data = (await res.json()) as BqQueryResponse;
+  const schema = (data.schema?.fields || []).map((f) => f.name);
+  return (data.rows || []).map((row) => {
+    const vals = row.f.map((c) => c.v);
+    const obj: Record<string, string | null> = {};
+    schema.forEach((name, i) => {
+      obj[name] = vals[i] ?? null;
+    });
+    return obj;
+  });
+}
+
+export interface SpendResult {
+  table: BillingExportTable;
+  currency: string;
+  totalCost: number;
+  totalCredits: number;
+  netCost: number;
+  windowDays: number;
+  byService: { service: string; cost: number; credits: number }[];
+  byProject: { project_id: string; cost: number; credits: number }[];
+  byDay: { day: string; cost: number; credits: number }[];
+  byMonth: { month: string; cost: number; credits: number }[];
+  byProjectMonth: { month: string; project_id: string; cost: number }[];
+  byProjectService: { project_id: string; service: string; cost: number; credits: number }[];
+}
+
+export async function querySpendForTable(
+  token: string,
+  table: BillingExportTable,
+  windowDays = 60,
+): Promise<SpendResult> {
+  const fq = `\`${table.projectId}.${table.datasetId}.${table.tableId}\``;
+  const recentSince = `TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL ${windowDays} DAY)`;
+  const dailySince = `TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)`;
+  const monthlySince = `TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH))`;
+
+  const [byService, byProject, byDay, byMonth, byProjectMonth, byProjectService] =
+    await Promise.all([
+      bqQuery(token, table.projectId, `
+        SELECT service.description AS service, SUM(cost) AS cost,
+               SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS credits, currency
+        FROM ${fq} WHERE _PARTITIONTIME >= ${recentSince}
+        GROUP BY service, currency ORDER BY cost DESC LIMIT 500
+      `),
+      bqQuery(token, table.projectId, `
+        SELECT project.id AS project_id, SUM(cost) AS cost,
+               SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS credits, currency
+        FROM ${fq} WHERE _PARTITIONTIME >= ${recentSince}
+        GROUP BY project_id, currency ORDER BY cost DESC LIMIT 1000
+      `),
+      bqQuery(token, table.projectId, `
+        SELECT DATE(usage_start_time) AS day, SUM(cost) AS cost,
+               SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS credits, currency
+        FROM ${fq} WHERE _PARTITIONTIME >= ${dailySince}
+        GROUP BY day, currency ORDER BY day
+      `),
+      bqQuery(token, table.projectId, `
+        SELECT FORMAT_DATE('%Y-%m', DATE(usage_start_time)) AS month, SUM(cost) AS cost,
+               SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS credits, currency
+        FROM ${fq} WHERE _PARTITIONTIME >= ${monthlySince}
+        GROUP BY month, currency ORDER BY month
+      `),
+      bqQuery(token, table.projectId, `
+        SELECT FORMAT_DATE('%Y-%m', DATE(usage_start_time)) AS month, project.id AS project_id,
+               SUM(cost) AS cost, currency
+        FROM ${fq} WHERE _PARTITIONTIME >= ${monthlySince}
+        GROUP BY month, project_id, currency ORDER BY month, cost DESC LIMIT 5000
+      `),
+      bqQuery(token, table.projectId, `
+        SELECT project.id AS project_id, service.description AS service,
+               SUM(cost) AS cost, SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)) AS credits, currency
+        FROM ${fq} WHERE _PARTITIONTIME >= ${recentSince}
+        GROUP BY project_id, service, currency HAVING ABS(cost) > 0.001 OR ABS(credits) > 0.001
+        ORDER BY project_id, cost DESC LIMIT 5000
+      `),
+    ]);
+
+  const n = (v: string | null | undefined) => Number(v || 0);
+  const s = (v: string | null | undefined) => v || "";
+  let totalCost = 0, totalCredits = 0;
+  let currency = "";
+  for (const r of byService) {
+    totalCost += n(r.cost);
+    totalCredits += n(r.credits);
+    if (r.currency) currency = r.currency;
+  }
+
+  return {
+    table,
+    currency,
+    totalCost,
+    totalCredits,
+    netCost: totalCost + totalCredits,
+    windowDays,
+    byService: byService.map((r) => ({ service: s(r.service), cost: n(r.cost), credits: n(r.credits) })),
+    byProject: byProject.map((r) => ({ project_id: s(r.project_id), cost: n(r.cost), credits: n(r.credits) })),
+    byDay: byDay.map((r) => ({ day: s(r.day), cost: n(r.cost), credits: n(r.credits) })),
+    byMonth: byMonth.map((r) => ({ month: s(r.month), cost: n(r.cost), credits: n(r.credits) })),
+    byProjectMonth: byProjectMonth.map((r) => ({ month: s(r.month), project_id: s(r.project_id), cost: n(r.cost) })),
+    byProjectService: byProjectService.map((r) => ({
+      project_id: s(r.project_id), service: s(r.service), cost: n(r.cost), credits: n(r.credits),
+    })),
+  };
+}

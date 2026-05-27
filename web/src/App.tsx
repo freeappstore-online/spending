@@ -15,6 +15,7 @@ import { Apis } from "./pages/Apis";
 import { Firestore } from "./pages/Firestore";
 import { Issues } from "./pages/Issues";
 import { Errors } from "./pages/Errors";
+import { Spend } from "./pages/Spend";
 
 export default function App() {
   const auth = useGoogleAuth();
@@ -37,6 +38,7 @@ export default function App() {
         <>
           <StatusBar loading={data.loading} phase={data.phase} fetchedAt={data.fetchedAt} onRefresh={data.refresh} />
           {tab === "overview" && <Overview data={data} />}
+          {tab === "spend" && <Spend data={data} />}
           {tab === "projects" && <Projects data={data} />}
           {tab === "billing" && <Billing data={data} />}
           {tab === "budgets" && <Budgets data={data} />}

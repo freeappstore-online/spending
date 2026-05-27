@@ -20,6 +20,9 @@ import {
   listEnabledServices,
   listAllResources,
   listFirestoreDatabases,
+  discoverBillingExportTables,
+  querySpendForTable,
+  type SpendResult,
 } from "../lib/gcp";
 
 const EMPTY: DashboardData = {
@@ -36,6 +39,7 @@ const EMPTY: DashboardData = {
   firestore: [],
   issues: [],
   errors: [],
+  spend: { loading: false, results: [] },
   budgetCoverage: { uncoveredCount: 0 },
   projectNames: {},
   projectNumberToName: {},
@@ -325,6 +329,34 @@ export function useGcpData(user: SignedInUser | null): UseGcpDataResult {
         (p) => p.lifecycleState === "ACTIVE" && p.billingLinked && !p.budgetCovered,
       ).length;
 
+      // Phase 5: BigQuery billing export (runs after main data is displayed)
+      setData((d) => ({ ...d, phase: "Discovering billing export tables..." }));
+
+      const activeProjectIds = enrichedProjects
+        .filter((p) => p.lifecycleState === "ACTIVE" && p.billingLinked)
+        .map((p) => p.projectId);
+
+      let spendResults: SpendResult[] = [];
+      try {
+        const exportTables = await discoverBillingExportTables(token, activeProjectIds);
+        if (!alive()) return;
+
+        if (exportTables.length > 0) {
+          setData((d) => ({ ...d, phase: `Querying ${exportTables.length} billing export table(s)...` }));
+          spendResults = await Promise.all(
+            exportTables.map((t) =>
+              querySpendForTable(token, t).catch((e) => {
+                errors.push({ context: `spend(${t.projectId}.${t.datasetId}.${t.tableId})`, message: String(e) });
+                return null;
+              }),
+            ),
+          ).then((results) => results.filter((r): r is SpendResult => r !== null));
+        }
+      } catch (e) {
+        errors.push({ context: "spend.discover", message: String(e) });
+      }
+      if (!alive()) return;
+
       const result: DashboardData = {
         loading: false,
         phase: "done",
@@ -339,6 +371,7 @@ export function useGcpData(user: SignedInUser | null): UseGcpDataResult {
         firestore: allFirestore,
         issues,
         errors,
+        spend: { loading: false, results: spendResults },
         budgetCoverage: { uncoveredCount },
         projectNames,
         projectNumberToName,
