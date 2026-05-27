@@ -1,4 +1,4 @@
-import type { SpendResultRef as SpendResult } from "../types";
+import type { SpendResult } from "../types";
 
 export interface SpendAgg {
   byDayAll: Record<string, number>;

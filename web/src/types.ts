@@ -191,12 +191,7 @@ export interface DashboardData {
   projectNumberToName: Record<string, string>;
 }
 
-export interface SpendData {
-  loading: boolean;
-  results: SpendResultRef[];
-}
-
-export interface SpendResultRef {
+export interface SpendResult {
   table: { projectId: string; datasetId: string; tableId: string };
   currency: string;
   totalCost: number;
@@ -209,6 +204,11 @@ export interface SpendResultRef {
   byMonth: { month: string; cost: number; credits: number }[];
   byProjectMonth: { month: string; project_id: string; cost: number }[];
   byProjectService: { project_id: string; service: string; cost: number; credits: number }[];
+}
+
+export interface SpendData {
+  loading: boolean;
+  results: SpendResult[];
 }
 
 export type TabId =

@@ -322,7 +322,7 @@ export function useGcpData(user: SignedInUser | null): UseGcpDataResult {
         .sort((a, b) => b.projects.length - a.projects.length);
 
       // Issues detection
-      const issues = detectIssues(enrichedProjects, allBudgets, allResources, idleProjects);
+      const issues = detectIssues(enrichedProjects, allBudgets, idleProjects);
 
       // Budget coverage
       const uncoveredCount = enrichedProjects.filter(
@@ -422,7 +422,6 @@ function isOlderThan6Months(createTime?: string): boolean {
 function detectIssues(
   projects: EnrichedProject[],
   budgets: ParsedBudget[],
-  _resources: Resource[],
   idleProjects: IdleProject[],
 ): Issue[] {
   const issues: Issue[] = [];

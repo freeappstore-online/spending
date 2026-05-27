@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { DashboardData, SpendResultRef } from "../types";
+import type { DashboardData, SpendResult } from "../types";
 import { SimpleBarChart, AreaLineChart, ChartCard, Grid2 } from "../components/Chart";
 import { TableWrap, Th, Td } from "../components/Table";
 import { fmtMoney, pLabel } from "../lib/fmt";
@@ -73,7 +73,7 @@ export function Spend({ data }: Props) {
   );
 }
 
-function SpendCard({ result: r }: { result: SpendResultRef }) {
+function SpendCard({ result: r }: { result: SpendResult }) {
   const monthlyData = (r.byMonth || []).map((row) => ({ name: row.month, value: row.cost }));
   const dailyData = (r.byDay || []).map((row) => ({ name: row.day, value: row.cost }));
   const topServices = (r.byService || []).slice(0, 10).map((row) => ({ name: row.service, value: row.cost }));
@@ -162,7 +162,7 @@ function SpendCard({ result: r }: { result: SpendResultRef }) {
   );
 }
 
-function ProjectDrilldown({ results, projectId }: { results: SpendResultRef[]; projectId: string }) {
+function ProjectDrilldown({ results, projectId }: { results: SpendResult[]; projectId: string }) {
   const services: Record<string, { gross: number; credits: number }> = {};
   for (const r of results) {
     for (const row of r.byProjectService) {

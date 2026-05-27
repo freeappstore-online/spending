@@ -1,21 +1,24 @@
+import { lazy, Suspense } from "react";
 import { FreeAppStore } from "@freeappstore/sdk";
 import { Shell } from "./components/Shell";
 import { useGoogleAuth } from "./hooks/useGoogleAuth";
 import { useHash } from "./hooks/useHash";
 import { useGcpData } from "./hooks/useGcpData";
-import { Overview } from "./pages/Overview";
-import { Projects } from "./pages/Projects";
 
-void new FreeAppStore({ appId: "gcp-spending" });
-import { Billing } from "./pages/Billing";
-import { Budgets } from "./pages/Budgets";
-import { Resources } from "./pages/Resources";
-import { Idle } from "./pages/Idle";
-import { Apis } from "./pages/Apis";
-import { Firestore } from "./pages/Firestore";
-import { Issues } from "./pages/Issues";
-import { Errors } from "./pages/Errors";
-import { Spend } from "./pages/Spend";
+// Register the app with FAS — the SDK side-effect proves the package loads.
+new FreeAppStore({ appId: "gcp-spending" });
+
+const Overview = lazy(() => import("./pages/Overview").then((m) => ({ default: m.Overview })));
+const Spend = lazy(() => import("./pages/Spend").then((m) => ({ default: m.Spend })));
+const Projects = lazy(() => import("./pages/Projects").then((m) => ({ default: m.Projects })));
+const Billing = lazy(() => import("./pages/Billing").then((m) => ({ default: m.Billing })));
+const Budgets = lazy(() => import("./pages/Budgets").then((m) => ({ default: m.Budgets })));
+const Resources = lazy(() => import("./pages/Resources").then((m) => ({ default: m.Resources })));
+const Idle = lazy(() => import("./pages/Idle").then((m) => ({ default: m.Idle })));
+const Apis = lazy(() => import("./pages/Apis").then((m) => ({ default: m.Apis })));
+const Firestore = lazy(() => import("./pages/Firestore").then((m) => ({ default: m.Firestore })));
+const Issues = lazy(() => import("./pages/Issues").then((m) => ({ default: m.Issues })));
+const Errors = lazy(() => import("./pages/Errors").then((m) => ({ default: m.Errors })));
 
 export default function App() {
   const auth = useGoogleAuth();
@@ -23,6 +26,8 @@ export default function App() {
   const data = useGcpData(auth.user);
 
   const signedIn = auth.configured && auth.user;
+  const fatal = data.phase === "error";
+  const tokenExpired = data.errors.some((e) => /expired|expiring/i.test(e.message));
 
   return (
     <Shell
@@ -37,17 +42,26 @@ export default function App() {
       {signedIn && (
         <>
           <StatusBar loading={data.loading} phase={data.phase} fetchedAt={data.fetchedAt} onRefresh={data.refresh} />
-          {tab === "overview" && <Overview data={data} />}
-          {tab === "spend" && <Spend data={data} />}
-          {tab === "projects" && <Projects data={data} />}
-          {tab === "billing" && <Billing data={data} />}
-          {tab === "budgets" && <Budgets data={data} />}
-          {tab === "resources" && <Resources data={data} />}
-          {tab === "idle" && <Idle data={data} />}
-          {tab === "apis" && <Apis data={data} />}
-          {tab === "firestore" && <Firestore data={data} />}
-          {tab === "issues" && <Issues data={data} />}
-          {tab === "errors" && <Errors data={data} />}
+          {fatal && (
+            <ErrorBanner
+              tokenExpired={tokenExpired}
+              onReauth={auth.signIn}
+              onDismiss={data.refresh}
+            />
+          )}
+          <Suspense fallback={<PageFallback />}>
+            {tab === "overview" && <Overview data={data} />}
+            {tab === "spend" && <Spend data={data} />}
+            {tab === "projects" && <Projects data={data} />}
+            {tab === "billing" && <Billing data={data} />}
+            {tab === "budgets" && <Budgets data={data} />}
+            {tab === "resources" && <Resources data={data} />}
+            {tab === "idle" && <Idle data={data} />}
+            {tab === "apis" && <Apis data={data} />}
+            {tab === "firestore" && <Firestore data={data} />}
+            {tab === "issues" && <Issues data={data} />}
+            {tab === "errors" && <Errors data={data} />}
+          </Suspense>
         </>
       )}
     </Shell>
@@ -134,6 +148,64 @@ function StatusBar({ loading, phase, fetchedAt, onRefresh }: {
       >
         {loading ? "Fetching..." : "Refresh"}
       </button>
+    </div>
+  );
+}
+
+function ErrorBanner({ tokenExpired, onReauth, onDismiss }: {
+  tokenExpired: boolean;
+  onReauth: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      role="alert"
+      className="rounded-xl p-4 mb-5 flex items-start gap-3 flex-wrap"
+      style={{
+        background: "rgba(220, 38, 38, 0.08)",
+        border: "1px solid var(--error)",
+        borderLeftWidth: 4,
+      }}
+    >
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold text-sm mb-1" style={{ color: "var(--error)" }}>
+          {tokenExpired ? "Session expired" : "Fetch failed"}
+        </div>
+        <div className="text-xs" style={{ color: "var(--ink)" }}>
+          {tokenExpired
+            ? "Your Google access token expired mid-fetch. Sign in again to reload data."
+            : "Something went wrong while fetching data. Check the Errors tab for details."}
+        </div>
+      </div>
+      <div className="flex gap-2">
+        {tokenExpired ? (
+          <button
+            type="button"
+            onClick={onReauth}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium"
+            style={{ background: "var(--error)", color: "white", border: 0, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Sign in again
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium"
+            style={{ background: "var(--panel)", color: "var(--ink)", border: "1px solid var(--line)", cursor: "pointer", fontFamily: "inherit" }}
+          >
+            Retry
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PageFallback() {
+  return (
+    <div className="text-sm" style={{ color: "var(--muted)" }}>
+      Loading...
     </div>
   );
 }

@@ -486,20 +486,8 @@ async function bqQuery(
   });
 }
 
-export interface SpendResult {
-  table: BillingExportTable;
-  currency: string;
-  totalCost: number;
-  totalCredits: number;
-  netCost: number;
-  windowDays: number;
-  byService: { service: string; cost: number; credits: number }[];
-  byProject: { project_id: string; cost: number; credits: number }[];
-  byDay: { day: string; cost: number; credits: number }[];
-  byMonth: { month: string; cost: number; credits: number }[];
-  byProjectMonth: { month: string; project_id: string; cost: number }[];
-  byProjectService: { project_id: string; service: string; cost: number; credits: number }[];
-}
+export type { SpendResult } from "../types";
+import type { SpendResult } from "../types";
 
 export async function querySpendForTable(
   token: string,
